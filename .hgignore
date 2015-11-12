@@ -1,0 +1,14 @@
+syntax: regexp
+^coverage$
+syntax: regexp
+^node_modules$
+syntax: regexp
+^\.externalToolBuilders$
+syntax: regexp
+^lib/.*\.js$
+syntax: regexp
+\.project$
+syntax: regexp
+^.git$
+syntax: regexp
+^.gitignore$

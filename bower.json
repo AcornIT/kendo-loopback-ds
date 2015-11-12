@@ -1,0 +1,24 @@
+{
+  "name": "kendo-loopback-ds",
+  "version": "0.1.0",
+  "description": "Add loopback capabilities to kendo, to work with akera-loopback-connector",
+  "main": "dist/kendo-loopback-ds.min.js",
+  "keywords": [
+    "akera",
+    "loopback",
+    "kendo",
+    "kendo-ui"
+  ],
+  "authors": [
+    "Radu Nicoara"
+  ],
+  "license": "SEE LICENSE IN <LICENSE>",
+  "homepage": "http://akera.io",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ]
+}

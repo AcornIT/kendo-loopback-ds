@@ -1,8 +1,49 @@
-/*! kendo-loopback-ds - 2015-10-29
+/*! kendo-loopback-ds - 2016-01-19
 * http://akera.io
 * Author: Radu Nicoara
-* Copyright (c) 2015 Acorn IT;
+* Copyright (c) 2016 Acorn IT;
 * SEE LICENSE IN <LICENSE> */
+kendo.loopback = kendo.loopback || {};
+
+function convertToKendo(schema) {
+    var description = {
+        name: schema.name,
+        fields: {}
+    };
+    for (var field in schema.properties) {
+        var fld = schema.properties[field];
+        description.fields[field] = {
+            nullable: !fld.required || false,
+            editable: !(fld.id && fld.id === true)
+        };
+
+        if (fld.id === true) {
+            description.id = field;
+            delete description.fields[field].id;
+        }
+        delete description.fields[field].required;
+    }
+    return description;
+}
+
+kendo.loopback.DataSource = kendo.data.DataSource.extend({
+    init: function(options) {
+        if (!options.lbModel) {
+            throw new Error('Invalid loopback model specified');
+        }
+        var transport = new kendo.loopback.Transport(options.lbModel);
+        transport.dataSource = this;
+        options.transport = transport;
+        options.serverFiltering = options.serverFiltering === undefined ? true : options.serverFiltering;
+        options.serverPaging = options.serverPaging === undefined ? true : options.serverPaging;
+        options.serverSorting = options.serverSorting === undefined ? true : options.serverSorting;
+        options.schema = options.schema || {};
+        options.schema.model = convertToKendo(options.lbModel.schema);
+        options.schema.total = options.schema.total || 'count';
+        kendo.data.DataSource.fn.init.call(this, options);
+    }
+});
+
 kendo.loopback = kendo.loopback || {};
 kendo.loopback.Filter = {
     getClause: function(flt) {
@@ -89,55 +130,84 @@ var LoopbackTransport = function(lbModel) {
     this.lbModel = lbModel;
 };
 
-jQuery.extend(true, LoopbackTransport.prototype, {
+LoopbackTransport.prototype = {
     read: function(options) {
-            var lbModel = this.lbModel;
-            var filter = {};
-            var self = this;
-            filter.limit = options.data.pageSize || null;
-            if (this.dataSource.options.serverPaging === true && options.data.page && options.data.page > 1) {
-                filter.offset = options.data.skip + 1;
-            }
-            if (this.dataSource.options.serverSorting === true && options.data.sort) {
-                filter.order = [];
-                options.data.sort.forEach(function(sort) {
-                    filter.order.push(sort.field + ' ' + sort.dir.toUpperCase());
-                });
-            }
-            if (this.dataSource.options.serverFiltering === true && options.data.filter) {
-                jQuery.extend(true, filter, kendo.loopback.Filter.convert(options.data.filter, false));
-            }
-            lbModel.find({
-                filter: filter
-            }).$promise.then(function(rs) {
-                if (self.dataSource.options.serverPaging === true) {
-                    lbModel.count({
-                        where: filter.where
-                    }).$promise.then(function(resp) {
-                        rs[self.dataSource.options.schema.total] = resp.count;
-                        options.success(rs);
-                    });
-                } else {
-                    options.success(rs);
-                }
+        var lbModel = this.lbModel;
+        var filter = {};
+        var self = this;
+        filter.limit = options.data.pageSize || null;
+        if (this.dataSource.options.serverPaging === true && options.data.page && options.data.page > 1) {
+            filter.offset = options.data.skip + 1;
+        }
+        if (this.dataSource.options.serverSorting === true && options.data.sort) {
+            filter.order = [];
+            options.data.sort.forEach(function(sort) {
+                filter.order.push(sort.field + ' ' + sort.dir.toUpperCase());
             });
         }
-        //TODO: Implement CUD operations
-});
-
-kendo.loopback.DataSource = kendo.data.DataSource.extend({
-    init: function(options) {
-        if (!options.lbModel) {
-            throw new Error('Invalid loopback model specified');
+        if (this.dataSource.options.serverFiltering === true && options.data.filter) {
+            jQuery.extend(true, filter, kendo.loopback.Filter.convert(options.data.filter, false));
         }
-        var transport = new LoopbackTransport(options.lbModel);
-        transport.dataSource = this;
-        options.transport = transport;
-        options.serverFiltering = options.serverFiltering || true;
-        options.serverPaging = options.serverPaging || true;
-        options.serverSorting = options.serverSorting || true;
-        options.schema = options.schema || {};
-        options.schema.total = options.schema.total || 'count';
-        kendo.data.DataSource.fn.init.call(this, options);
-    }
-});
+        lbModel.find({
+            filter: filter
+        }).$promise.then(function(rs) {
+            if (self.dataSource.options.serverPaging === true) {
+                lbModel.count({
+                    where: filter.where
+                }).$promise.then(function(resp) {
+                    rs[self.dataSource.options.schema.total] = resp.count;
+                    options.success(rs);
+                });
+            } else {
+                options.success(rs);
+            }
+        });
+    },
+    create: function(options) {
+        var lbModel = this.lbModel;
+        var idField = this.dataSource.options.schema.model.id;
+        var itm = options.data;
+        var newItm = {};
+        for (var k in itm) {
+            if (k !== idField) {
+                newItm[k] = itm[k];
+            }
+        }
+        lbModel.create(newItm).$promise.then(function(rs) {
+            rs.$promise = null;
+            options.success(rs);
+        }, function(err) {
+            options.error(err);
+        });
+    },
+    update: function(options) {
+        var idFilter = {};
+        var idField = this.dataSource.options.schema.model.id;
+        idFilter[idField] = options.data[idField];
+        this.lbModel.prototype$updateAttributes(idFilter, options.data).$promise.then(function(rs) {
+            var itm = {};
+            itm.prototype = {};
+            jQuery.extend(true, itm.prototype, rs.prototype);
+            for (var k in rs) {
+                if (k !== '$promise' && k !== '_events' && k !== '$resolved' && k !== 'dirty') {
+                    itm[k] = rs[k];
+                }
+            }
+            options.success(itm);
+        }, function(err) {
+            options.error(err);
+        });
+    },
+    delete: function(options) {
+            var idFilter = {};
+            var idField = this.dataSource.options.schema.model.id;
+            idFilter[idField] = options.data[idField];
+            this.lbModel.deleteById(idFilter).$promise.then(function(rs) {
+                options.success(rs);
+            }, function(err) {
+                options.error(err);
+            });
+        }
+};
+
+kendo.loopback.Transport = LoopbackTransport;

@@ -54,9 +54,9 @@ kendo.loopback.DataSource = kendo.data.DataSource.extend({
         var transport = new LoopbackTransport(options.lbModel);
         transport.dataSource = this;
         options.transport = transport;
-        options.serverFiltering = options.serverFiltering || true;
-        options.serverPaging = options.serverPaging || true;
-        options.serverSorting = options.serverSorting || true;
+        options.serverFiltering = options.serverFiltering === undefined ? true : options.serverFiltering;
+        options.serverPaging = options.serverPaging === undefined ? true : options.serverPaging;
+        options.serverSorting = options.serverSorting === undefined ? true : options.serverSorting;
         options.schema = options.schema || {};
         options.schema.total = options.schema.total || 'count';
         kendo.data.DataSource.fn.init.call(this, options);
